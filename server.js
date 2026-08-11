@@ -22,7 +22,7 @@ app.post('/validate-phone', async (req, res) => {
         const lookupResponse = await axios.get(lookupUrl);
         
         // Abstract API returns capitalized line types (e.g., "Landline", "VoIP")
-        // We convert it to lowercase to ensure the if-statement catches it safely
+        const lineType = lookupResponse.data.type ? lookupResponse.data.type.toLowerCase() : 'unknown';
         const lineType = lookupResponse.data.line_type ? lookupResponse.data.line_type.toLowerCase() : 'unknown';
 
         // Conditional Logic: Is it a Landline or VOIP?
