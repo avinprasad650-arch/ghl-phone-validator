@@ -21,9 +21,8 @@ app.post('/validate-phone', async (req, res) => {
         const lookupUrl = `https://phoneintelligence.abstractapi.com/v1/?api_key=${ABSTRACT_API_KEY}&phone=${phone}`;
         const lookupResponse = await axios.get(lookupUrl);
         
-        // Abstract API returns capitalized line types (e.g., "Landline", "VoIP")
+        // Extract exact carrier type from Abstract API (Fixed single declaration)
         const lineType = lookupResponse.data.type ? lookupResponse.data.type.toLowerCase() : 'unknown';
-        const lineType = lookupResponse.data.line_type ? lookupResponse.data.line_type.toLowerCase() : 'unknown';
 
         // Conditional Logic: Is it a Landline or VOIP?
         if (lineType === 'landline' || lineType === 'voip') {
