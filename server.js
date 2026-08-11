@@ -1,0 +1,57 @@
+const express = require('express');
+const axios = require('axios');
+const app = express();
+
+// Middleware to parse JSON payloads from GoHighLevel
+app.use(express.json());
+
+// Secure environment variables
+const NUMLOOKUP_API_KEY = process.env.NUMLOOKUP_API_KEY;
+const GHL_API_TOKEN = process.env.GHL_API_TOKEN;
+
+app.post('/validate-phone', async (req, res) => {
+    try {
+        // 1. Extract payload variables
+        const phone = req.body.phone;
+        const contactId = req.body.contact_id;
+
+        // Immediately acknowledge receipt to GHL to prevent webhook timeouts
+        res.status(200).send('Webhook received and processing');
+
+        // 2. Validate against NumLookupAPI
+        const lookupUrl = `https://api.numlookupapi.com/v1/validate/${phone}?apikey=${NUMLOOKUP_API_KEY}`;
+        const lookupResponse = await axios.get(lookupUrl);
+        
+        // Extract the carrier type (ensure you cross-reference NumLookupAPI's exact JSON response key)
+        const lineType = lookupResponse.data.line_type; 
+
+        // 3. Conditional Logic: Is it a Landline or VOIP?
+        if (lineType === 'landline' || lineType === 'voip') {
+            
+            // 4. Inject Tag via GoHighLevel API v2
+            const ghlTagUrl = `https://services.leadconnectorhq.com/contacts/${contactId}/tags`;
+            
+            await axios.post(ghlTagUrl, 
+                { 
+                    tags: ["invalid-landline"] 
+                }, 
+                { 
+                    headers: { 
+                        'Authorization': `Bearer ${GHL_API_TOKEN}`, 
+                        'Version': '2021-07-28',
+                        'Content-Type': 'application/json'
+                    } 
+                }
+            );
+            console.log(`Successfully tagged ${contactId} as invalid-landline.`);
+        } else {
+            console.log(`Contact ${contactId} is a valid mobile number. No tags applied.`);
+        }
+
+    } catch (error) {
+        console.error('Error processing validation webhook:', error.message);
+    }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Phone Validation Engine running on port ${PORT}`));
