@@ -22,7 +22,7 @@ app.post('/validate-phone', async (req, res) => {
         const lookupUrl = `https://api.numlookupapi.com/v1/validate/${phone}?apikey=${NUMLOOKUP_API_KEY}`;
         const lookupResponse = await axios.get(lookupUrl);
         
-        // Extract the carrier type (ensure you cross-reference NumLookupAPI's exact JSON response key)
+        // Extract the carrier type
         const lineType = lookupResponse.data.line_type; 
 
         // 3. Conditional Logic: Is it a Landline or VOIP?
@@ -49,7 +49,13 @@ app.post('/validate-phone', async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Error processing validation webhook:', error.message);
+        // UPGRADED ERROR LOGGER
+        if (error.response) {
+            console.error(`🚨 FAILED API URL: ${error.config.url}`);
+            console.error(`🚨 ERROR REASON: ${JSON.stringify(error.response.data)}`);
+        } else {
+            console.error('Error processing validation webhook:', error.message);
+        }
     }
 });
 
