@@ -18,7 +18,7 @@ app.post('/validate-phone', async (req, res) => {
         res.status(200).send('Webhook received and processing');
 
         // Abstract API Validation Endpoint
-        const lookupUrl = `https://phonevalidation.abstractapi.com/v1/?api_key=${ABSTRACT_API_KEY}&phone=${phone}`;
+        const lookupUrl = `https://phoneintelligence.abstractapi.com/v1/?api_key=${ABSTRACT_API_KEY}&phone=${phone}`;
         const lookupResponse = await axios.get(lookupUrl);
         
         // Abstract API returns capitalized line types (e.g., "Landline", "VoIP")
