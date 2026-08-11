@@ -17,15 +17,17 @@ app.post('/validate-phone', async (req, res) => {
         // Immediately acknowledge receipt to GHL to prevent webhook timeouts
         res.status(200).send('Webhook received and processing');
 
-        // Abstract API Validation Endpoint
+        // Abstract API Phone Intelligence Endpoint
         const lookupUrl = `https://phoneintelligence.abstractapi.com/v1/?api_key=${ABSTRACT_API_KEY}&phone=${phone}`;
         const lookupResponse = await axios.get(lookupUrl);
         
-        // Extract exact carrier type from Abstract API (Fixed single declaration)
-        const lineType = lookupResponse.data.type ? lookupResponse.data.type.toLowerCase() : 'unknown';
+        // Safely extract the nested carrier line type from the Phone Intelligence payload
+        const carrierData = lookupResponse.data.phone_carrier || {};
+        const rawType = carrierData.line_type || lookupResponse.data.line_type || 'unknown';
+        const lineType = rawType.toLowerCase();
 
-        // Conditional Logic: Is it a Landline or VOIP?
-        if (lineType === 'landline' || lineType === 'voip') {
+        // Conditional Logic: Uses .includes() to catch variations like "non-fixed voip"
+        if (lineType.includes('landline') || lineType.includes('voip')) {
             
             // Inject Tag via GoHighLevel API v2
             const ghlTagUrl = `https://services.leadconnectorhq.com/contacts/${contactId}/tags`;
@@ -48,7 +50,6 @@ app.post('/validate-phone', async (req, res) => {
         }
 
     } catch (error) {
-        // UPGRADED ERROR LOGGER
         if (error.response) {
             console.error(`🚨 FAILED API URL: ${error.config.url}`);
             console.error(`🚨 ERROR REASON: ${JSON.stringify(error.response.data)}`);
