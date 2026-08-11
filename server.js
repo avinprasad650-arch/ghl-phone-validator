@@ -6,29 +6,29 @@ const app = express();
 app.use(express.json());
 
 // Secure environment variables
-const NUMLOOKUP_API_KEY = process.env.NUMLOOKUP_API_KEY;
+const ABSTRACT_API_KEY = process.env.ABSTRACT_API_KEY;
 const GHL_API_TOKEN = process.env.GHL_API_TOKEN;
 
 app.post('/validate-phone', async (req, res) => {
     try {
-        // 1. Extract payload variables
         const phone = req.body.phone;
         const contactId = req.body.contact_id;
 
         // Immediately acknowledge receipt to GHL to prevent webhook timeouts
         res.status(200).send('Webhook received and processing');
 
-        // 2. Validate against NumLookupAPI
-        const lookupUrl = `https://api.numlookupapi.com/v1/validate/${phone}?apikey=${NUMLOOKUP_API_KEY}`;
+        // Abstract API Validation Endpoint
+        const lookupUrl = `https://phonevalidation.abstractapi.com/v1/?api_key=${ABSTRACT_API_KEY}&phone=${phone}`;
         const lookupResponse = await axios.get(lookupUrl);
         
-        // Extract the carrier type
-        const lineType = lookupResponse.data.line_type; 
+        // Abstract API returns capitalized line types (e.g., "Landline", "VoIP")
+        // We convert it to lowercase to ensure the if-statement catches it safely
+        const lineType = lookupResponse.data.line_type ? lookupResponse.data.line_type.toLowerCase() : 'unknown';
 
-        // 3. Conditional Logic: Is it a Landline or VOIP?
+        // Conditional Logic: Is it a Landline or VOIP?
         if (lineType === 'landline' || lineType === 'voip') {
             
-            // 4. Inject Tag via GoHighLevel API v2
+            // Inject Tag via GoHighLevel API v2
             const ghlTagUrl = `https://services.leadconnectorhq.com/contacts/${contactId}/tags`;
             
             await axios.post(ghlTagUrl, 
@@ -43,9 +43,9 @@ app.post('/validate-phone', async (req, res) => {
                     } 
                 }
             );
-            console.log(`Successfully tagged ${contactId} as invalid-landline.`);
+            console.log(`Successfully tagged ${contactId} as invalid-landline (Carrier Type: ${lineType}).`);
         } else {
-            console.log(`Contact ${contactId} is a valid mobile number. No tags applied.`);
+            console.log(`Contact ${contactId} is a valid mobile number (Carrier Type: ${lineType}). No tags applied.`);
         }
 
     } catch (error) {
