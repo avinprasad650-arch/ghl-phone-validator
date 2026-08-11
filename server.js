@@ -17,17 +17,23 @@ app.post('/validate-phone', async (req, res) => {
         // Immediately acknowledge receipt to GHL to prevent webhook timeouts
         res.status(200).send('Webhook received and processing');
 
-        // Abstract API Phone Intelligence Endpoint
+        // Abstract API Premium Phone Intelligence Endpoint
         const lookupUrl = `https://phoneintelligence.abstractapi.com/v1/?api_key=${ABSTRACT_API_KEY}&phone=${phone}`;
         const lookupResponse = await axios.get(lookupUrl);
+        const data = lookupResponse.data;
         
-        // Safely extract the nested carrier line type from the Phone Intelligence payload
-        const carrierData = lookupResponse.data.phone_carrier || {};
-        const rawType = carrierData.line_type || lookupResponse.data.line_type || 'unknown';
-        const lineType = rawType.toLowerCase();
+        // 1. Extract Premium Data Points
+        const lineType = data.phone_carrier?.line_type ? data.phone_carrier.line_type.toLowerCase() : 'unknown';
+        const isVoip = data.phone_validation?.is_voip === true;
+        const isValid = data.phone_validation?.is_valid === true;
+        const lineStatus = data.phone_validation?.line_status ? data.phone_validation.line_status.toLowerCase() : 'unknown';
 
-        // Conditional Logic: Uses .includes() to catch variations like "non-fixed voip"
-        if (lineType.includes('landline') || lineType.includes('voip')) {
+        // 2. Cross-Reference Logic (Validate data against multiple conditions)
+        const isLandline = lineType.includes('landline');
+        const isDeadNumber = !isValid || lineStatus !== 'active';
+
+        // 3. The Ultimate Bad Number Trap
+        if (isLandline || isVoip || isDeadNumber) {
             
             // Inject Tag via GoHighLevel API v2
             const ghlTagUrl = `https://services.leadconnectorhq.com/contacts/${contactId}/tags`;
@@ -44,9 +50,9 @@ app.post('/validate-phone', async (req, res) => {
                     } 
                 }
             );
-            console.log(`Successfully tagged ${contactId} as invalid-landline (Carrier Type: ${lineType}).`);
+            console.log(`🚫 Tagged ${contactId} as invalid. (Type: ${lineType}, VoIP: ${isVoip}, Active: ${lineStatus})`);
         } else {
-            console.log(`Contact ${contactId} is a valid mobile number (Carrier Type: ${lineType}). No tags applied.`);
+            console.log(`✅ Contact ${contactId} is a valid, active mobile number. No tags applied.`);
         }
 
     } catch (error) {
@@ -60,4 +66,4 @@ app.post('/validate-phone', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Phone Validation Engine running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Premium Validation Engine running on port ${PORT}`));
