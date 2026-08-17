@@ -1,69 +1,62 @@
-const express = require('express');
-const axios = require('axios');
-const app = express();
+import os
+import requests
+from flask import Flask, request, jsonify
 
-// Middleware to parse JSON payloads from GoHighLevel
-app.use(express.json());
+# Initialize the Flask application
+app = Flask(__name__)
 
-// Secure environment variables
-const ABSTRACT_API_KEY = process.env.ABSTRACT_API_KEY;
-const GHL_API_TOKEN = process.env.GHL_API_TOKEN;
+# Securely pull your Abstract API key from Render's environment variables
+ABSTRACT_API_KEY = os.environ.get("ABSTRACT_API_KEY", "YOUR_ABSTRACT_KEY_HERE")
 
-app.post('/validate-phone', async (req, res) => {
-    try {
-        const phone = req.body.phone;
-        const contactId = req.body.contact_id;
+@app.route('/webhook', methods=['POST'])
+def handle_webhook():
+    # 1. Catch the incoming JSON payload from GoHighLevel
+    data = request.json
+    
+    # Extract the phone number (Ensure your GHL webhook maps the number to 'phone')
+    phone = data.get('phone') 
+    
+    if not phone:
+        return jsonify({"error": "No phone number provided"}), 400
 
-        // Immediately acknowledge receipt to GHL to prevent webhook timeouts
-        res.status(200).send('Webhook received and processing');
-
-        // Abstract API Premium Phone Intelligence Endpoint
-        const lookupUrl = `https://phoneintelligence.abstractapi.com/v1/?api_key=${ABSTRACT_API_KEY}&phone=${phone}`;
-        const lookupResponse = await axios.get(lookupUrl);
-        const data = lookupResponse.data;
+    # 2. Format the URL for the Abstract API Phone Validation endpoint
+    url = f"https://phonevalidation.abstractapi.com/v1/?api_key={ABSTRACT_API_KEY}&phone={phone}"
+    
+    try:
+        # 3. Execute the GET request to Abstract API (The HLR Ping)
+        response = requests.get(url)
+        abstract_data = response.json()
         
-        // 1. Extract Premium Data Points
-        const lineType = data.phone_carrier?.line_type ? data.phone_carrier.line_type.toLowerCase() : 'unknown';
-        const isVoip = data.phone_validation?.is_voip === true;
-        const isValid = data.phone_validation?.is_valid === true;
-        const lineStatus = data.phone_validation?.line_status ? data.phone_validation.line_status.toLowerCase() : 'unknown';
+        # 4. Extract the critical data points from the Abstract response
+        # 'valid' is a true/false boolean representing network connectivity
+        is_valid = abstract_data.get("valid") 
+        # 'type' is the line classification (e.g., 'Landline', 'Mobile')
+        phone_type = abstract_data.get("type", "").lower()
 
-        // 2. Cross-Reference Logic (Validate data against multiple conditions)
-        const isLandline = lineType.includes('landline');
-        const isDeadNumber = !isValid || lineStatus !== 'active';
+        # 5. Execute the tagging logic based on the HLR response
+        if is_valid == False:
+            # The line is disconnected or entirely invalid
+            tag_to_apply = "invalid-landline" 
+        elif phone_type == "landline" or phone_type == "voip":
+            # The line is active, but cannot receive standard SMS
+            tag_to_apply = "invalid-landline"
+        else:
+            # The line is active and is a mobile device
+            tag_to_apply = "clean-mobile"
 
-        // 3. The Ultimate Bad Number Trap
-        if (isLandline || isVoip || isDeadNumber) {
-            
-            // Inject Tag via GoHighLevel API v2
-            const ghlTagUrl = `https://services.leadconnectorhq.com/contacts/${contactId}/tags`;
-            
-            await axios.post(ghlTagUrl, 
-                { 
-                    tags: ["invalid-landline"] 
-                }, 
-                { 
-                    headers: { 
-                        'Authorization': `Bearer ${GHL_API_TOKEN}`, 
-                        'Version': '2021-07-28',
-                        'Content-Type': 'application/json'
-                    } 
-                }
-            );
-            console.log(`🚫 Tagged ${contactId} as invalid. (Type: ${lineType}, VoIP: ${isVoip}, Active: ${lineStatus})`);
-        } else {
-            console.log(`✅ Contact ${contactId} is a valid, active mobile number. No tags applied.`);
-        }
+        # 6. Return the finalized JSON package back to GoHighLevel
+        return jsonify({
+            "phone": phone,
+            "is_network_active": is_valid,
+            "line_type": phone_type,
+            "assigned_tag": tag_to_apply
+        }), 200
 
-    } catch (error) {
-        if (error.response) {
-            console.error(`🚨 FAILED API URL: ${error.config.url}`);
-            console.error(`🚨 ERROR REASON: ${JSON.stringify(error.response.data)}`);
-        } else {
-            console.error('Error processing validation webhook:', error.message);
-        }
-    }
-});
+    except Exception as e:
+        # Failsafe error handling
+        return jsonify({"error": str(e)}), 500
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Premium Validation Engine running on port ${PORT}`));
+if __name__ == '__main__':
+    # Bind the server to Render's required port
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
