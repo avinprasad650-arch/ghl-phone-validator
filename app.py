@@ -37,10 +37,13 @@ def handle_webhook():
 
         # 5. Logic to determine the correct GoHighLevel tag
         if is_valid == False:
-            tag_to_apply = "invalid-landline" 
+            # The line is disconnected entirely
+            tag_to_apply = "dead-number" 
         elif phone_type == "landline" or phone_type == "voip":
+            # The line is active, but cannot receive standard SMS
             tag_to_apply = "invalid-landline"
         else:
+            # The line is active and is a mobile device
             tag_to_apply = "clean-mobile"
 
         # 6. PUSH THE TAG BACK TO GOHIGHLEVEL VIA API
