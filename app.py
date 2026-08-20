@@ -19,9 +19,11 @@ def health_check():
         "status": "online",
         "message": "Render service is awake and active"
     }), 200
-
-# --- GOHIGHLEVEL WEBHOOK ROUTE ---
+# Accept both the old and new webhook URLs
 @app.route('/webhook', methods=['POST'])
+@app.route('/validate-phone', methods=['POST'])
+def handle_webhook():
+    data = request.json
 def handle_webhook():
     # 1. Catch the incoming JSON payload from GoHighLevel
     data = request.json
