@@ -2,7 +2,6 @@ import os
 import requests
 from flask import Flask, request, jsonify
 
-# Initialize the Flask application
 app = Flask(__name__)
 
 # Fetch the credentials from Render's environment variables
@@ -12,18 +11,14 @@ GHL_API_TOKEN = os.environ.get("GHL_API_TOKEN")
 # --- ROOT HEALTH CHECK ROUTE (FOR UPTIMEROBOT) ---
 @app.route('/', methods=['GET'])
 def health_check():
-    """
-    Returns a 200 OK status to keep Render awake and satisfy UptimeRobot pings.
-    """
     return jsonify({
         "status": "online",
         "message": "Render service is awake and active"
     }), 200
-# Accept both the old and new webhook URLs
+
+# --- GOHIGHLEVEL WEBHOOK ROUTE ---
 @app.route('/webhook', methods=['POST'])
 @app.route('/validate-phone', methods=['POST'])
-def handle_webhook():
-    data = request.json
 def handle_webhook():
     # 1. Catch the incoming JSON payload from GoHighLevel
     data = request.json
@@ -34,34 +29,28 @@ def handle_webhook():
     
     # Fail-safe if GHL sends empty data
     if not phone or not contact_id:
-        return jsonify(error="Missing phone or contact_id"), 400
+        return jsonify({'error':'Missing phone or contact_id'}), 400
         
-    # 2. Execute the GET request to Abstract API
-    # Abstract API Phone Validation - Live HLR Ping
     abstract_url = f"https://phonevalidation.abstractapi.com/v1/?api_key={ABSTRACT_API_KEY}&phone={phone}"
     
     try:
-        # 3. Execute the GET request to Abstract API
-        abstract_response = requests.get(abstract_url)
-        abstract_data = abstract_response.json()
+        # Execute the GET request to Abstract API
+        response = requests.get(abstract_url)
+        abstract_data = response.json()
         
-        # 4. Extract connectivity status and line type
+        # Extract connectivity status and line type
         is_valid = abstract_data.get('valid')
         phone_type = abstract_data.get('type', '').lower()
         
-        # 5. Logic to determine the correct GoHighLevel tag
-        if is_valid is False:
-            # The line is disconnected entirely
+        # Logic to determine the correct GoHighLevel tag
+        if is_valid == False:
             tag_to_apply = "dead-number"
         elif phone_type == "landline" or phone_type == "voip":
-            # The line is active, but cannot receive standard SMS
             tag_to_apply = "invalid-landline"
         else:
-            # The line is active and is a mobile device
             tag_to_apply = "clean-mobile"
             
-        # 6. PUSH THE TAG BACK TO GOHIGHLEVEL VIA API
-        # Target the specific contact using their contact ID
+        # PUSH THE TAG BACK TO GOHIGHLEVEL VIA API
         ghl_url = f"https://services.leadconnectorhq.com/contacts/{contact_id}/tags"
         
         ghl_headers = {
@@ -77,16 +66,17 @@ def handle_webhook():
         # Execute the tag addition
         ghl_response = requests.post(ghl_url, headers=ghl_headers, json=ghl_payload)
         
-        # 7. Return success log to the Render terminal
+        # Return success log to the Render terminal
         return jsonify({
-            "phone": phone,
+            "status": "success",
             "assigned_tag": tag_to_apply,
             "ghl_response_status": ghl_response.status_code
         }), 200
 
     except Exception as e:
-        return jsonify(error=f"{str(e)}"), 500
+        # If an error happens, this guarantees a return so Flask doesn't crash
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
