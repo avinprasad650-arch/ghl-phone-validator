@@ -35,11 +35,21 @@ def handle_webhook():
         abstract_response = requests.get(abstract_url)
         abstract_data = abstract_response.json()
 
-        # Isolate the line type (e.g. Mobile, Landline, VOIP)
-        line_type = abstract_data.get("type", "Unknown")
+        # 1. Isolate the line validity and type
+        is_valid = abstract_data.get("valid")
+        line_type = abstract_data.get("type", "Unknown").lower()
 
-        # --- SEND DATA BACK TO GOHIGHLEVEL ---
-        ghl_url = f"https://services.leadconnectorhq.com/contacts/{contact_id}"
+        # 2. Map the data to your exact GoHighLevel Workflow Tags
+        if is_valid == False:
+            tag_to_apply = "dead-number"
+        elif line_type == "mobile":
+            tag_to_apply = "clean-mobile"
+        else:
+            tag_to_apply = "invalid-landline"
+
+        # 3. --- SEND TAG BACK TO GOHIGHLEVEL ---
+        # Note the updated endpoint specifically for adding tags
+        ghl_url = f"https://services.leadconnectorhq.com/contacts/{contact_id}/tags"
         
         headers = {
             "Authorization": f"Bearer {GHL_API_TOKEN}",
@@ -48,19 +58,15 @@ def handle_webhook():
         }
 
         payload = {
-            "customFields": [
-                {
-                    "key": "line_type",
-                    "field_value": line_type
-                }
-            ]
+            "tags": [tag_to_apply]
         }
 
-        ghl_response = requests.put(ghl_url, json=payload, headers=headers)
+        # Uses POST to append the tag to the contact
+        ghl_response = requests.post(ghl_url, json=payload, headers=headers)
 
         return jsonify({
             "status": "success",
-            "line_type": line_type,
+            "tag_applied": tag_to_apply,
             "ghl_response": ghl_response.json()
         }), 200
 
