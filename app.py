@@ -8,27 +8,26 @@ app = Flask(__name__)
 ABSTRACT_API_KEY = os.environ.get("ABSTRACT_API_KEY")
 GHL_API_TOKEN = os.environ.get("GHL_API_TOKEN")
 
-@app.route('/', methods=['GET'])
+@app.route("/", methods=["GET"])
 def health_check():
     return jsonify({
-        "status": "active",
+        "status": "success",
         "message": "Render service is awake and active"
     }), 200
 
-# --- GOHIGHLEVEL WEBHOOK ROUTE ---
-@app.route('/webhook', methods=['POST'])
+@app.route("/webhook", methods=["POST"])
 def handle_webhook():
     try:
         # Parse the incoming JSON payload from GHL
         data = request.json
-
+        
         # Extract both the phone number and the unique contact ID
         phone = data.get('phone', '')
         contact_id = data.get('contact_id', '')
 
-        # Fail-safe if GHL sends empty data
+        # Fail-safe: if GHL sends empty data
         if not phone or not contact_id:
-            return jsonify({"error": "Missing phone or contact_id"}), 400
+            return {"error": "Missing phone or contact_id"}, 400
 
         # Execute the GET request to Abstract API
         abstract_url = f"https://phonevalidation.abstractapi.com/v1/?api_key={ABSTRACT_API_KEY}&phone={phone}"
@@ -40,6 +39,7 @@ def handle_webhook():
         line_type = abstract_data.get("type", "Unknown").lower()
 
         # 2. Map the data to your exact GoHighLevel Workflow Tags
+        # FIXED: "mobile" is now lowercase to properly match the line_type format
         if is_valid == False:
             tag_to_apply = "dead-number"
         elif line_type == "mobile":
@@ -47,10 +47,9 @@ def handle_webhook():
         else:
             tag_to_apply = "invalid-landline"
 
-        # 3. --- SEND TAG BACK TO GOHIGHLEVEL ---
-        # Note the updated endpoint specifically for adding tags
+        # 3. SEND TAG BACK TO GOHIGHLEVEL
         ghl_url = f"https://services.leadconnectorhq.com/contacts/{contact_id}/tags"
-        
+
         headers = {
             "Authorization": f"Bearer {GHL_API_TOKEN}",
             "Version": "2021-07-28",
@@ -61,7 +60,7 @@ def handle_webhook():
             "tags": [tag_to_apply]
         }
 
-        # Uses POST to append the tag to the contact
+        # Issue POST to append the tag to the contact
         ghl_response = requests.post(ghl_url, json=payload, headers=headers)
 
         return jsonify({
@@ -73,5 +72,5 @@ def handle_webhook():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
