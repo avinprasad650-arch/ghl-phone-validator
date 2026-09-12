@@ -12,14 +12,14 @@ ABSTRACT_API_KEY = os.environ.get("ABSTRACT_API_KEY", "87def4db2e9149ad971a9c685
 GHL_API_KEY = os.environ.get("GHL_API_KEY")
 GHL_API_URL = "https://services.leadconnectorhq.com"
 
-# --- GHL CUSTOM FIELD IDS ---
-# Replace these strings with your actual GoHighLevel Custom Field IDs
-FIELD_IDS = {
-    "mortgage_balance": "YOUR_MORTGAGE_BALANCE_FIELD_ID",
-    "monthly_payment": "YOUR_MONTHLY_PAYMENT_FIELD_ID",
-    "lender_name": "YOUR_LENDER_FIELD_ID",
-    "last_objection": "YOUR_LAST_OBJECTION_FIELD_ID",
-    "objection_text": "YOUR_OBJECTION_TEXT_FIELD_ID"
+# --- GHL CUSTOM FIELD KEYS ---
+# These match the exact text inside the 'Key' column in GoHighLevel
+FIELD_KEYS = {
+    "mortgage_balance": "estimated_mortgage_balance",
+    "monthly_payment": "estimated_property_value", # Swap this key later if you make a dedicated monthly payment field
+    "lender_name": "lender_name", 
+    "last_objection": "last_objection",
+    "objection_text": "objection_text"
 }
 
 # ==========================================
@@ -75,19 +75,21 @@ def update_ghl_context():
         return jsonify({"status": "test_ok", "message": "Test ping received successfully"}), 200
 
     custom_fields = []
-    for key, field_id in FIELD_IDS.items():
-        if data.get(key) and not field_id.startswith("YOUR_"):
+    for json_key, ghl_key in FIELD_KEYS.items():
+        if data.get(json_key):
             custom_fields.append({
-                "id": field_id,
-                "field_value": str(data.get(key))
+                "key": ghl_key,  # Uses the text Key instead of the alphanumeric ID
+                "field_value": str(data.get(json_key))
             })
 
     headers = {
         "Authorization": f"Bearer {GHL_API_KEY}",
         "Version": "2021-07-28",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
     }
 
+    # 1. Update the contact's custom fields
     if custom_fields:
         requests.put(
             f"{GHL_API_URL}/contacts/{contact_id}",
@@ -95,6 +97,7 @@ def update_ghl_context():
             headers=headers
         )
 
+    # 2. Add a note to the contact timeline so you see the live transcript
     if data.get("objection_text"):
         note_payload = {
             "body": f"LIVE AI NOTE - Objection: {data.get('last_objection')} | Verbatim: {data.get('objection_text')} | Balance: {data.get('mortgage_balance')}",
