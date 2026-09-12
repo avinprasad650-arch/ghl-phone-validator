@@ -65,14 +65,20 @@ def validate_phone():
 # ==========================================
 # ROUTE 2: GHL LIVE CONTEXT UPDATE (AI SCREEN POP)
 # ==========================================
-@app.route("/update-ghl-context", methods=["POST"])
+@app.route("/update-ghl-context", methods=["GET", "POST", "OPTIONS"])
 def update_ghl_context():
     data = request.get_json(silent=True) or {}
     contact_id = data.get("contactId")
 
-    # Satisfies GHL's "Test & deploy" ping to unlock the Save button
-    if not contact_id:
-        return jsonify({"status": "test_ok", "message": "Test ping received successfully"}), 200
+    # Auto-approve GHL's test pings (GET/OPTIONS) with CORS headers to unlock the Save button
+    if request.method in ["GET", "OPTIONS"] or not contact_id:
+        resp = jsonify({"status": "test_ok", "message": "Test ping received successfully"})
+        resp.headers.add("Access-Control-Allow-Origin", "*")
+        resp.headers.add("Access-Control-Allow-Headers", "*")
+        resp.headers.add("Access-Control-Allow-Methods", "*")
+        return resp, 200
+
+    # ... Leave the rest of the code below this line (custom_fields = [], etc.) exactly as it is!
 
     custom_fields = []
     for json_key, ghl_key in FIELD_KEYS.items():
