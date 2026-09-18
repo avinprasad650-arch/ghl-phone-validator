@@ -23,9 +23,17 @@ FIELD_KEYS = {
 }
 
 # ==========================================
+# ROUTE 0: UPTIME ROBOT HEALTH CHECK
+# ==========================================
+# UptimeRobot sends a GET request here every 5 minutes. 
+# This simple response keeps the server awake and shows "Up" in your dashboard.
+@app.route('/', methods=['GET'])
+def health_check():
+    return "Server is awake!", 200
+
+# ==========================================
 # ROUTE 1: ABSTRACT API PHONE VALIDATION
 # ==========================================
-@app.route('/', methods=['POST'])
 @app.route('/validate-phone', methods=['POST'])
 def validate_phone():
     data = request.get_json(silent=True) or {}
@@ -72,7 +80,7 @@ def validate_phone():
 # ==========================================
 @app.route('/update-ghl-context', methods=['GET', 'POST', 'OPTIONS'])
 def update_ghl_context():
-    if request.method == 'OPTIONS':
+    if request.method == 'OPTIONS' or request.method == 'GET':
         # Auto-approve GHL's test pings (GET/OPTIONS) with CORS headers to unlock the Save button
         resp = jsonify({"status": "test_ok", "message": "Test ping received successfully"})
         resp.headers['Access-Control-Allow-Origin'] = '*'
