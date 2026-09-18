@@ -5,8 +5,8 @@ from flask import Flask, request, jsonify
 app = Flask(__name__)
 
 # --- API KEYS ---
-# Hardcoded Abstract API Key to bypass Render's Environment Variable UI
-ABSTRACT_API_KEY = "87de4db2e9148a8971a9c6859a012ac"
+# THE REAL, CORRECT PHONE INTELLIGENCE API KEY
+ABSTRACT_API_KEY = "87de41b2b1a946b5714cd65b5012ec"
 
 # GoHighLevel API Key (Must be set in Render Environment Variables!)
 GHL_API_KEY = os.environ.get("GHL_API_KEY", "")
