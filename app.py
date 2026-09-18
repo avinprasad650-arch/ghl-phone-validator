@@ -5,87 +5,90 @@ from flask import Flask, request, jsonify
 app = Flask(__name__)
 
 # --- API KEYS ---
-# Your provided Abstract API Key for phone validation
-ABSTRACT_API_KEY = os.environ.get("ABSTRACT_API_KEY", "87def4db2e9149ad971a9c6859a012ac")
+# Get your Abstract API Key for Phone Validation
+ABSTRACT_API_KEY = os.environ.get("ABSTRACT_API_KEY", "87be41b2b1a946b5714cd65b5012ec")
 
 # GoHighLevel API Key (Must be set in Render Environment Variables!)
-GHL_API_KEY = os.environ.get("GHL_API_KEY")
+GHL_API_KEY = os.environ.get("GHL_API_KEY", "")
 GHL_API_URL = "https://services.leadconnectorhq.com"
 
 # --- GHL CUSTOM FIELD KEYS ---
-# These match the exact text inside the 'Key' column in GoHighLevel
+# Map exactly the text inside the 'Key' column in GoHighLevel
 FIELD_KEYS = {
-    "mortgage_balance": "estimated_mortgage_balance",
-    "monthly_payment": "estimated_property_value", # Swap this key later if you make a dedicated monthly payment field
-    "lender_name": "lender_name", 
-    "last_objection": "last_objection",
+    "mobile": "contact.phone",
+    "monthly_payment": "estimated_property_value", 
+    "lender_name": "lender_name",
+    "loan_balance": "loan_balance",
     "objection_text": "objection_text"
 }
 
 # ==========================================
 # ROUTE 1: ABSTRACT API PHONE VALIDATION
 # ==========================================
-@app.route("/validate-phone", methods=["POST"])
+# Added both '/' and '/validate-phone' so it works even if you forget the path in GHL!
+@app.route('/', methods=['POST'])
+@app.route('/validate-phone', methods=['POST'])
 def validate_phone():
     data = request.get_json(silent=True) or {}
-    phone = data.get("phone")
+    phone = data.get('phone')
 
-    # Satisfies GHL's "Test & deploy" ping to unlock the Save button
+    # Satisfies GHL's 'Test & Deploy' ping to unlock the Save button
     if not phone:
         return jsonify({"status": "test_ok", "message": "Test ping received successfully"}), 200
 
-    try:
-        abstract_url = f"https://phonevalidation.abstractapi.com/v1/?api_key={ABSTRACT_API_KEY}&phone={phone}"
-        response = requests.get(abstract_url)
-        response.raise_for_status()
-        api_data = response.json()
+    # 1. Ping Abstract API
+    abstract_url = f"https://phonevalidation.abstractapi.com/v1/?api_key={ABSTRACT_API_KEY}&phone={phone}"
+    response = requests.get(abstract_url)
+    
+    if response.status_code != 200:
+        return jsonify({"error": "Failed to connect to Abstract API"}), 500
 
-        is_valid = api_data.get("valid")
-        line_type = api_data.get("type", "").lower()
+    api_data = response.json()
 
-        status = "dead"
-        if is_valid:
-            if "mobile" in line_type:
-                status = "clean-mobile"
-            elif "landline" in line_type:
-                status = "invalid-landline"
-            else:
-                status = line_type
+    is_valid = api_data.get('valid')
+    line_type = api_data.get('type', '').lower()
 
-        return jsonify({
-            "phone": phone,
-            "line_type": line_type,
-            "status": status,
-            "is_valid": is_valid
-        }), 200
+    status = "dead"
+    if is_valid:
+        if "mobile" in line_type:
+            status = "valid-mobile"
+        elif "landline" in line_type:
+            status = "valid-landline"
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return jsonify({
+        "phone": phone,
+        "is_valid": is_valid,
+        "status": status,
+        "line_type": line_type
+    }), 200
 
 # ==========================================
 # ROUTE 2: GHL LIVE CONTEXT UPDATE (AI SCREEN POP)
 # ==========================================
-@app.route("/update-ghl-context", methods=["GET", "POST", "OPTIONS"])
+@app.route('/update-ghl-context', methods=['GET', 'POST', 'OPTIONS'])
 def update_ghl_context():
-    data = request.get_json(silent=True) or {}
-    contact_id = data.get("contactId")
-
-    # Auto-approve GHL's test pings (GET/OPTIONS) with CORS headers to unlock the Save button
-    if request.method in ["GET", "OPTIONS"] or not contact_id:
+    if request.method == 'OPTIONS':
+        # Auto-approve GHL's test pings (GET/OPTIONS) with CORS headers to unlock the Save button
         resp = jsonify({"status": "test_ok", "message": "Test ping received successfully"})
-        resp.headers.add("Access-Control-Allow-Origin", "*")
-        resp.headers.add("Access-Control-Allow-Headers", "*")
-        resp.headers.add("Access-Control-Allow-Methods", "*")
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Methods'] = '*'
         return resp, 200
 
-    # ... Leave the rest of the code below this line (custom_fields = [], etc.) exactly as it is!
+    data = request.get_json(silent=True) or {}
+    contact_id = data.get("contact_id")
 
+    if not contact_id:
+        return jsonify({"error": "Missing contact_id"}), 400
+
+    # Construct the custom fields update payload
     custom_fields = []
-    for json_key, ghl_key in FIELD_KEYS.items():
-        if data.get(json_key):
+    
+    for key, val in data.items():
+        if key in FIELD_KEYS.keys():
             custom_fields.append({
-                "key": ghl_key,  # Uses the text Key instead of the alphanumeric ID
-                "field_value": str(data.get(json_key))
+                "id": FIELD_KEYS[key],
+                "key": FIELD_KEYS[key],
+                "field_value": str(val).strip()
             })
 
     headers = {
@@ -104,14 +107,16 @@ def update_ghl_context():
         )
 
     # 2. Add a note to the contact timeline so you see the live transcript
-    if data.get("objection_text"):
-        note_payload = {
-            "body": f"LIVE AI NOTE - Objection: {data.get('last_objection')} | Verbatim: {data.get('objection_text')} | Balance: {data.get('mortgage_balance')}",
-            "contactId": contact_id
-        }
-        requests.post(f"{GHL_API_URL}/contacts/{contact_id}/notes", json=note_payload, headers=headers)
+    objection_text = data.get('objection_text', '')
+    if objection_text:
+        note_body = f"AI LIVE NOTE - Objection: {objection_text} | Balance: {data.get('loan_balance', '')}"
+        requests.post(
+            f"{GHL_API_URL}/contacts/{contact_id}/notes",
+            json={"body": note_body},
+            headers=headers
+        )
 
     return jsonify({"success": True})
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
