@@ -6,7 +6,7 @@ app = Flask(__name__)
 
 # --- API KEYS ---
 # THE REAL, CORRECT PHONE INTELLIGENCE API KEY
-ABSTRACT_API_KEY = "87def4db2e9149ad971a9c6859a012ac"
+ABSTRACT_API_KEY = "23d872f5692b4beb8613168ea1953e5b"
 
 # GoHighLevel API Key (Must be set in Render Environment Variables!)
 GHL_API_KEY = os.environ.get("GHL_API_KEY", "")
