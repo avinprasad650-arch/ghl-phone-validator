@@ -5,8 +5,8 @@ from flask import Flask, request, jsonify
 app = Flask(__name__)
 
 # --- API KEYS ---
-# Get your Abstract API Key for Phone Validation
-ABSTRACT_API_KEY = os.environ.get("ABSTRACT_API_KEY", "")
+# Hardcoded Abstract API Key to bypass Render's Environment Variable UI
+ABSTRACT_API_KEY = "87de4db2e9148a8971a9c6859a012ec"
 
 # GoHighLevel API Key (Must be set in Render Environment Variables!)
 GHL_API_KEY = os.environ.get("GHL_API_KEY", "")
@@ -25,8 +25,6 @@ FIELD_KEYS = {
 # ==========================================
 # ROUTE 0: UPTIME ROBOT HEALTH CHECK
 # ==========================================
-# UptimeRobot sends a GET request here every 5 minutes. 
-# This simple response keeps the server awake and shows "Up" in your dashboard.
 @app.route('/', methods=['GET'])
 def health_check():
     return "Server is awake!", 200
@@ -46,7 +44,7 @@ def validate_phone():
     # 1. Ping Abstract API (Using params dictionary to safely URL-encode formatting)
     abstract_url = "https://phonevalidation.abstractapi.com/v1/"
     payload = {
-        "api_key": ABSTRACT_API_KEY,
+        "api_key": ABSTRACT_API_KEY.strip(),
         "phone": phone
     }
     
