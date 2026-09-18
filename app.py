@@ -6,7 +6,7 @@ app = Flask(__name__)
 
 # --- API KEYS ---
 # Hardcoded Abstract API Key to bypass Render's Environment Variable UI
-ABSTRACT_API_KEY = "87de4db2e9148a8971a9c6859a012ec"
+ABSTRACT_API_KEY = "87de4db2e9148a8971a9c6859a012ac"
 
 # GoHighLevel API Key (Must be set in Render Environment Variables!)
 GHL_API_KEY = os.environ.get("GHL_API_KEY", "")
