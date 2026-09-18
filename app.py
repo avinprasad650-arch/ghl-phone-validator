@@ -6,7 +6,7 @@ app = Flask(__name__)
 
 # --- API KEYS ---
 # Get your Abstract API Key for Phone Validation
-ABSTRACT_API_KEY = os.environ.get("ABSTRACT_API_KEY", "87be41b2b1a946b5714cd65b5012ec")
+ABSTRACT_API_KEY = os.environ.get("ABSTRACT_API_KEY", "")
 
 # GoHighLevel API Key (Must be set in Render Environment Variables!)
 GHL_API_KEY = os.environ.get("GHL_API_KEY", "")
@@ -25,7 +25,6 @@ FIELD_KEYS = {
 # ==========================================
 # ROUTE 1: ABSTRACT API PHONE VALIDATION
 # ==========================================
-# Added both '/' and '/validate-phone' so it works even if you forget the path in GHL!
 @app.route('/', methods=['POST'])
 @app.route('/validate-phone', methods=['POST'])
 def validate_phone():
@@ -36,12 +35,18 @@ def validate_phone():
     if not phone:
         return jsonify({"status": "test_ok", "message": "Test ping received successfully"}), 200
 
-    # 1. Ping Abstract API
-    abstract_url = f"https://phonevalidation.abstractapi.com/v1/?api_key={ABSTRACT_API_KEY}&phone={phone}"
-    response = requests.get(abstract_url)
+    # 1. Ping Abstract API (Using params dictionary to safely URL-encode formatting)
+    abstract_url = "https://phonevalidation.abstractapi.com/v1/"
+    payload = {
+        "api_key": ABSTRACT_API_KEY,
+        "phone": phone
+    }
+    
+    response = requests.get(abstract_url, params=payload)
     
     if response.status_code != 200:
-        return jsonify({"error": "Failed to connect to Abstract API"}), 500
+        # If it fails, send the exact error text back to GoHighLevel for easy debugging
+        return jsonify({"error": f"Abstract API Error {response.status_code}: {response.text}"}), 500
 
     api_data = response.json()
 
