@@ -4,130 +4,36 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# --- API KEYS ---
-# THE REAL, CORRECT PHONE INTELLIGENCE API KEY
-ABSTRACT_API_KEY = "23d872f5692b4beb8613168ea1953e5b"
-
-# GoHighLevel API Key (Must be set in Render Environment Variables!)
+# --- API KEYS FROM VERCEL ENV VARS (NOT hardcoded) ---
+ABSTRACT_API_KEY = os.environ.get("ABSTRACT_API_KEY", "")
 GHL_API_KEY = os.environ.get("GHL_API_KEY", "")
 GHL_API_URL = "https://services.leadconnectorhq.com"
+GHL_LOCATION_ID = os.environ.get("GHL_LOCATION_ID", "") # add this in Vercel
 
-# --- GHL CUSTOM FIELD KEYS ---
-# Map exactly the text inside the 'Key' column in GoHighLevel
-FIELD_KEYS = {
-    "mobile": "contact.phone",
-    "monthly_payment": "estimated_property_value", 
-    "lender_name": "lender_name",
-    "loan_balance": "loan_balance",
-    "objection_text": "objection_text"
-}
-
-# ==========================================
-# ROUTE 0: UPTIME ROBOT HEALTH CHECK
-# ==========================================
+# --- ROUTE 0: UPTIME ROBOT HEALTH CHECK ---
+# Uptime Robot should ping: https://ghl-phone-validator.vercel.app/  GET
 @app.route('/', methods=['GET'])
 def health_check():
-    return "Server is awake!", 200
+    return jsonify({"status": "Server is awake!", "routes": ["/", "/validate-phone"]}), 200
 
-# ==========================================
-# ROUTE 1: ABSTRACT API PHONE VALIDATION
-# ==========================================
+# --- ROUTE 1: PHONE VALIDATION ---
+# GHL Webhook should POST to: https://ghl-phone-validator.vercel.app/validate-phone
 @app.route('/validate-phone', methods=['POST'])
 def validate_phone():
-    data = request.get_json(silent=True) or {}
-    phone = data.get('phone')
+    try:
+        data = request.get_json(force=True)
+        print(f"Incoming data: {data}")
 
-    # Satisfies GHL's 'Test & Deploy' ping to unlock the Save button
-    if not phone:
-        return jsonify({"status": "test_ok", "message": "Test ping received successfully"}), 200
+        # GHL sends phone as {{contact.phone}} - handle both formats
+        phone = data.get('phone') or data.get('contact.phone') or data.get('Phone')
+        contact_id = data.get('contact_id') or data.get('contactId') or data.get('id')
 
-    # 1. Ping Abstract API (Using params dictionary to safely URL-encode formatting)
-    abstract_url = "https://phonevalidation.abstractapi.com/v1/"
-    payload = {
-        "api_key": ABSTRACT_API_KEY.strip(),
-        "phone": phone
-    }
-    
-    response = requests.get(abstract_url, params=payload)
-    
-    if response.status_code != 200:
-        # If it fails, send the exact error text back to GoHighLevel for easy debugging
-        return jsonify({"error": f"Abstract API Error {response.status_code}: {response.text}"}), 500
+        if not phone:
+            return jsonify({"error": "No phone provided"}), 400
 
-    api_data = response.json()
+        # --- ABSTRACT API CALL ---
+        if not ABSTRACT_API_KEY:
+            return jsonify({"error": "ABSTRACT_API_KEY missing in env"}), 500
 
-    is_valid = api_data.get('valid')
-    line_type = api_data.get('type', '').lower()
-
-    status = "dead"
-    if is_valid:
-        if "mobile" in line_type:
-            status = "valid-mobile"
-        elif "landline" in line_type:
-            status = "valid-landline"
-
-    return jsonify({
-        "phone": phone,
-        "is_valid": is_valid,
-        "status": status,
-        "line_type": line_type
-    }), 200
-
-# ==========================================
-# ROUTE 2: GHL LIVE CONTEXT UPDATE (AI SCREEN POP)
-# ==========================================
-@app.route('/update-ghl-context', methods=['GET', 'POST', 'OPTIONS'])
-def update_ghl_context():
-    if request.method == 'OPTIONS' or request.method == 'GET':
-        # Auto-approve GHL's test pings (GET/OPTIONS) with CORS headers to unlock the Save button
-        resp = jsonify({"status": "test_ok", "message": "Test ping received successfully"})
-        resp.headers['Access-Control-Allow-Origin'] = '*'
-        resp.headers['Access-Control-Allow-Methods'] = '*'
-        return resp, 200
-
-    data = request.get_json(silent=True) or {}
-    contact_id = data.get("contact_id")
-
-    if not contact_id:
-        return jsonify({"error": "Missing contact_id"}), 400
-
-    # Construct the custom fields update payload
-    custom_fields = []
-    
-    for key, val in data.items():
-        if key in FIELD_KEYS.keys():
-            custom_fields.append({
-                "id": FIELD_KEYS[key],
-                "key": FIELD_KEYS[key],
-                "field_value": str(val).strip()
-            })
-
-    headers = {
-        "Authorization": f"Bearer {GHL_API_KEY}",
-        "Version": "2021-07-28",
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-    }
-
-    # 1. Update the contact's custom fields
-    if custom_fields:
-        requests.put(
-            f"{GHL_API_URL}/contacts/{contact_id}",
-            json={"customFields": custom_fields},
-            headers=headers
-        )
-
-    # 2. Add a note to the contact timeline so you see the live transcript
-    objection_text = data.get('objection_text', '')
-    if objection_text:
-        note_body = f"AI LIVE NOTE - Objection: {objection_text} | Balance: {data.get('loan_balance', '')}"
-        requests.post(
-            f"{GHL_API_URL}/contacts/{contact_id}/notes",
-            json={"body": note_body},
-            headers=headers
-        )
-
-    return jsonify({"success": True})
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
+        abstract_url = f"https://phonevalidation.abstractapi.com/v1/?api_key={ABSTRACT_API_KEY}&phone={phone}"
+        resp = requests.get(abstract_url
