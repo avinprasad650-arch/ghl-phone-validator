@@ -29,6 +29,11 @@ def validate_phone():
         resp = requests.get(abstract_url, timeout=10)
         result = resp.json()
 
+        # Handle Abstract errors
+        if result.get('error'):
+            print(f"Abstract error: {result}")
+            return jsonify({"tag": "api-failure", "error": result, "phone": phone}), 200
+
         is_valid = result.get('valid')
         line_type = str(result.get('type') or result.get('line_type') or "").lower()
 
