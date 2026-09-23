@@ -57,4 +57,4 @@ def validate_phone():
 
     except Exception as e:
         print(f"Error: {e}")
-        return jsonify({"tag": "api-failure", "error": str(e
+        return jsonify({"tag": "api-failure", "error": str(e)}), 200
