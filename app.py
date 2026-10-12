@@ -32,18 +32,21 @@ def validate_phone():
         # Handle Abstract errors
         if result.get('error'):
             print(f"Abstract error: {result}")
-            return jsonify({"tag": "api-failure", "error": result, "phone": phone}), 200
+            # Abstract Phone Intelligence nests validation and carrier data
+    val_data = result.get("phone_validation") or {}
+    carrier_data = result.get("phone_carrier") or {}
 
-        is_valid = result.get('valid')
-        line_type = str(result.get('type') or result.get('line_type') or "").lower()
+    is_valid = val_data.get("is_valid") if "is_valid" in val_data else result.get("valid")
+    line_type = (carrier_data.get("line_type") or result.get("type") or result.get("line_type") or "").lower()
 
-        if not is_valid:
-            tag = "dead-number"
-        elif "landline" in line_type:
-            tag = "invalid-landline"
-        elif "mobile" in line_type:
-            tag = "clean-mobile"
-        else:
+    if not is_valid:
+        tag = "dead-number"
+    elif "mobile" in line_type:
+        tag = "clean-mobile"
+    elif "landline" in line_type:
+        tag = "invalid-landline"
+    else:
+        tag = "dead-number"
             tag = "dead-number"
 
         if contact_id and GHL_API_KEY:
