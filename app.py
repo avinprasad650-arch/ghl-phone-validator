@@ -5,7 +5,7 @@ from flask import Flask, request, jsonify
 app = Flask(__name__)
 
 ABSTRACT_API_KEY = os.environ.get("ABSTRACT_API_KEY", "")
-GHL_API_KEY = os.environ.get("GHL_API_KEY", "")
+GHL_API_URL = "https://services.leadconnectorhq.com"
 GHL_API_URL = "https://services.leadconnectorhq.com"
 
 @app.route('/', methods=['GET'])
