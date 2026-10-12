@@ -23,7 +23,7 @@ def validate_phone():
             return jsonify({"tag": "api-failure", "error": "No phone"}), 200
 
         if not ABSTRACT_API_KEY:
-            return jsonify({"tag": "api-failure", "error": "ABSTRACT_API_KEY missing"}), 200
+            abstract_url = f"https://phoneintelligence.abstractapi.com/v1/?api_key={ABSTRACT_API_KEY}&phone={phone}"
 
         abstract_url = f"https://phonevalidation.abstractapi.com/v1/?api_key={ABSTRACT_API_KEY}&phone={phone}"
         resp = requests.get(abstract_url, timeout=10)
