@@ -50,6 +50,7 @@ def validate_phone():
             tag = "dead-number"
 
         if contact_id and GHL_API_KEY:
+          if contact_id and GHL_API_KEY:
             try:
                 headers = {
                     "Authorization": f"Bearer {GHL_API_KEY}",
@@ -57,11 +58,9 @@ def validate_phone():
                     "Content-Type": "application/json"
                 }
                 url = f"{GHL_API_URL}/contacts/{contact_id}/tags"
-                requests.post(url, headers=headers, json={"tags": [tag]}, timeout=10)
+                requests.post(url, json={"tags": [tag]}, headers=headers, timeout=10)
             except Exception as e:
-                print(f"GHL update failed: {e}")
-
-        return jsonify({"phone": phone, "tag": tag, "abstract": result}), 200
+                print(f"GHL Update failed: {e}")        return jsonify({"phone": phone, "tag": tag, "abstract": result}), 200
 
     except Exception as e:
         print(f"Error: {e}")
